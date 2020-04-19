@@ -1,36 +1,11 @@
 <template>
   <div id="app">
-    <span class="text">ABCDEFG</span>
     <router-view/>
   </div>
 </template>
-<!--配置rem-->
-<script>
-  import { mapGetters } from 'vuex'
 
-  export default {
-    computed: {
-      ...mapGetters(['test'])
-    },
-    methods: {
-      fn() {
-        return {
-          a: 1,
-          b: 2
-        }
-      }
-    },
-    mounted() {
-      // this.$store.dispatch('setTest', 9).then(() => {
-      //  console.log(this.test)
-      // })
-      console.log({
-        ...this.fn(),
-        c: 3,
-        d: 4
-      })
-    }
-  }
+<script>
+  export default {}
   document.addEventListener('DOMContentLoaded', () => {
     const html = document.querySelector('html')
     let fontSize = window.innerWidth / 10
@@ -38,12 +13,11 @@
     html.style.fontSize = fontSize + 'px'
   })
 </script>
-<style lang="scss" scoped>
-  @import "./assets/styles/global";
 
-  .text {
-    font-family: 'Days One';
-    font-size: px2rem(20);
-    color: #ffa900;
+<style lang="scss" scoped>
+  #app {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
   }
 </style>
