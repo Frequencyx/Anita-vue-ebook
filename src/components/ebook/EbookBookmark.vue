@@ -127,7 +127,7 @@
         }
       },
       beforeThreshold(v) {
-        // 状态2：未到达零界状态
+        // 状态2：未到达临界状态
         this.$refs.bookmark.style.top = `${-v}px`
         this.beforeHeight()
         const iconDown = this.$refs.iconDown
@@ -136,7 +136,7 @@
         }
       },
       afterThreshold(v) {
-        // 状态3：超越零界状态
+        // 状态3：超越临界状态
         this.$refs.bookmark.style.top = `${-v}px`
         if (this.isBookmark) {
           this.text = this.$t('book.releaseDeleteMark')
