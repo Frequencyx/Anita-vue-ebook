@@ -13,7 +13,7 @@
   </div>
 </template>
 
-<script type="text/ECMAScript-6">
+<script type="text/ecmascript-6">
   export default {
     props: {
       title: String,
