@@ -135,7 +135,7 @@
           iconDown.style.transform = 'rotate(0deg)'
         }
       },
-      afteErThreshold(v) {
+      afterThreshold(v) {
         // 状态3：超越临界状态
         this.$refs.bookmark.style.top = `${-v}px`
         if (this.isBookmark) {
