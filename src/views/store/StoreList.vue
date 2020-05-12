@@ -1,3 +1,4 @@
+<!-- 书城列表组件 -->
 <template>
   <div class="book-list-wrapper">
     <detail-title :title="title"
@@ -15,7 +16,7 @@
 </template>
 
 <script>
-  import DetailTitle from '../../components/detail/DetailTitle'
+  import DetailTitle from '../../components/detail/DetaiTitle'
   import Scroll from '../../components/common/Scroll'
   import Featured from '../../components/home/Featured'
   import { realPx } from '../../utils/utils'
@@ -29,6 +30,7 @@
       Featured
     },
     computed: {
+      // 动态生成标题数据
       title() {
         if (this.list) {
           return this.total && this.$t('home.allBook').replace('$1', this.totalNumber)
@@ -36,6 +38,7 @@
           return null
         }
       },
+      // 获取当前列表中电子书总数
       totalNumber() {
         let num = 0
         Object.keys(this.list).forEach(key => {
@@ -51,12 +54,14 @@
       }
     },
     methods: {
+      // 获取分类文本
       getCategoryText(key) {
         return `${categoryText(categoryList[key], this)}(${this.list[key].length})`
       },
       back() {
         this.$router.go(-1)
       },
+      // 标题阴影的隐藏状态
       onScroll(offsetY) {
         if (offsetY > realPx(42)) {
           this.$refs.title.showShadow()
@@ -64,6 +69,7 @@
           this.$refs.title.hideShadow()
         }
       },
+      // 通过API获取分类列表
       getList() {
         list().then(response => {
           this.list = response.data.data
@@ -71,11 +77,13 @@
           const category = this.$route.query.category
           const keyword = this.$route.query.keyword
           if (category) {
+            // 如果用户传入了分类数据，则从结果中搜索相应的分类数据并进行展示
             const key = Object.keys(this.list).filter(item => item === category)[0]
             const data = this.list[key]
             this.list = {}
             this.list[key] = data
           } else if (keyword) {
+            // 如果用户输入了关键字，则通过书名进行关键字匹配（搜索算法）
             Object.keys(this.list).filter(key => {
               this.list[key] = this.list[key].filter(book => book.fileName.indexOf(keyword) >= 0)
               return this.list[key].length > 0

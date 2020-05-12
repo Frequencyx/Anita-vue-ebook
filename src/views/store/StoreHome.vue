@@ -1,3 +1,4 @@
+<!-- 书城首页组件 -->
 <template>
   <div class="store-home">
     <search-bar></search-bar>
@@ -54,17 +55,24 @@
       }
     },
     methods: {
+      // 处理滚动事件
       onScroll(offsetY) {
+        // 设置vuex的offsetY
+        // SearchBar组件会进行监听
         this.setOffsetY(offsetY)
         if (offsetY > 0) {
+          // 如果滚动超过0，则隐藏标题，滚动条距顶部为52像素
           this.scrollTop = 52
         } else {
+          // 如果滚动为0，则显示标题，滚动条距顶部为94像素
           this.scrollTop = 94
         }
+        // 刷新滚动条
         this.$refs.scroll.refresh()
       }
     },
     mounted() {
+      // 通过API获取首页数据
       home().then(response => {
         if (response && response.status === 200) {
           const data = response.data

@@ -1,3 +1,4 @@
+<!-- 听书组件 -->
 <template>
   <div class="book-speaking">
     <detail-title @back="back" ref="title"></detail-title>
@@ -75,7 +76,7 @@
   import Bottom from '../../components/speak/SpeakBottom'
   import SpeakWindow from '../../components/speak/SpeakMask'
   import { findBook, getCategoryName } from '../../utils/store'
-  import { download, flatList } from '../../api/store'
+  import { flatList } from '../../api/store'
   import { getLocalForage } from '../../utils/localForage'
   import { realPx } from '../../utils/utils'
   import Epub from 'epubjs'
@@ -92,30 +93,37 @@
       SpeakWindow
     },
     computed: {
+      // 音频当前播放的分钟数
       currentMinute() {
         const m = Math.floor(this.currentPlayingTime / 60)
         return m < 10 ? '0' + m : m
       },
+      // 音频当前播放的秒数
       currentSecond() {
         const s = Math.floor(this.currentPlayingTime - parseInt(this.currentMinute) * 60)
         return s < 10 ? '0' + s : s
       },
+      // 音频的总时长
       totalMinute() {
         const m = Math.floor(this.totalPlayingTime / 60)
         return m < 10 ? '0' + m : m
       },
+      // 音频的总秒数
       totalSecond() {
         const s = Math.floor(this.totalPlayingTime - parseInt(this.totalMinute) * 60)
         return s < 10 ? '0' + s : s
       },
+      // 音频的剩余分钟数
       leftMinute() {
         const m = Math.floor((this.totalPlayingTime - this.currentPlayingTime) / 60)
         return m < 10 ? '0' + m : m
       },
+      // 音频的剩余秒数
       leftSecond() {
         const s = Math.floor((this.totalPlayingTime - this.currentPlayingTime) - parseInt(this.leftMinute) * 60)
         return s < 10 ? '0' + s : s
       },
+      // 播放信息对象
       playInfo() {
         if (this.audioCanPlay) {
           return {
@@ -130,9 +138,11 @@
           return null
         }
       },
+      // 电子书的语种
       lang() {
         return this.metadata ? this.metadata.language : ''
       },
+      // 当播放面板显示时，禁用滚动条（解决事件穿透问题）
       disableScroll() {
         if (this.$refs.speakWindow) {
           return this.$refs.speakWindow.visible
@@ -140,15 +150,19 @@
           return false
         }
       },
+      // 是否底部的播放面板
       showPlay() {
         return this.playingIndex >= 0
       },
+      // 滚动条距底部距离，当显示播放面板时为116像素，不显示时为52像素
       scrollBottom() {
         return this.showPlay ? 116 : 52
       },
+      // 当前章节信息
       chapter() {
         return this.flatNavigation[this.playingIndex]
       },
+      // 电子书摘要信息
       desc() {
         if (this.description) {
           return this.description.substring(0, 100)
@@ -156,6 +170,7 @@
           return ''
         }
       },
+      // 一维数组的目录
       flatNavigation() {
         if (this.navigation) {
           return Array.prototype.concat.apply([], Array.prototype.concat.apply([], this.doFlatNavigation(this.navigation.toc)))
@@ -163,12 +178,15 @@
           return []
         }
       },
+      // 电子书分类
       category() {
         return this.bookItem ? getCategoryName(this.bookItem.category) : ''
       },
+      // 电子书书名
       title() {
         return this.metadata ? this.metadata.title : ''
       },
+      // 电子书作者
       author() {
         return this.metadata ? this.metadata.creator : ''
       }
@@ -199,15 +217,23 @@
       }
     },
     methods: {
+      // 在线语音合成
       createVoice(text) {
         const xmlhttp = new XMLHttpRequest()
+        // 创建HTTP请求，同步接收结果
         xmlhttp.open('GET', `${process.env.VUE_APP_VOICE_URL}/voice?text=${text}&lang=${this.lang.toLowerCase()}`, false)
+        // 发送请求
         xmlhttp.send()
+        // 获取响应内容
         const xmlDoc = xmlhttp.responseText
         if (xmlDoc) {
+          // 解析响应内容
           const json = JSON.parse(xmlDoc)
           if (json.path) {
+            // path为语音合成生成的MP3文件下载路径，将该路径赋值audio.src
+            // audio控件会自动加载音频文件
             this.$refs.audio.src = json.path
+            // 自动播放MP3
             this.continuePlay()
           } else {
             this.showToast('播放失败，未生成链接')
@@ -247,6 +273,10 @@
         })
         */
       },
+      // 切换播放状态，如果处于播放状态则暂停，如果处于暂停状态，则播放
+      // 注意状态0和状态2是不通的
+      // 状态0 表示还未播放，所以需要先进行语音合成
+      // 状态2 表示已经合成，所以直接进行播放即可
       togglePlay() {
         if (!this.isPlaying) {
           if (this.playStatus === 0) {
@@ -258,35 +288,46 @@
           this.pausePlay()
         }
       },
+      // 生成语音合成的文本信息
       speak(item, index) {
+        // 重置播放状态，停止一切播放
         this.resetPlay()
         this.playingIndex = index
         this.$nextTick(() => {
           this.$refs.scroll.refresh()
         })
         if (this.chapter) {
+          // 获取当前点击的章节信息
           this.section = this.book.spine.get(this.chapter.href)
+          // 渲染章节
           this.rendition.display(this.section.href).then(section => {
+            // 获取当前位置对象
             const currentPage = this.rendition.currentLocation()
             const cfibase = section.cfiBase
             const cfistart = currentPage.start.cfi.replace(/.*!/, '').replace(/\)/, '')
             const cfiend = currentPage.end.cfi.replace(/.*!/, '').replace(/\)/, '')
             this.currentSectionIndex = currentPage.start.displayed.page
             this.currentSectionTotal = currentPage.start.displayed.total
+            // 合成cfi信息
             const cfi = `epubcfi(${cfibase}!,${cfistart},${cfiend})`
             // console.log(currentPage, cfi, cfibase, cfistart, cfiend)
+            // 通过Book.getRange(cfi)方法获取指定片段的cfi对应的文本
             this.book.getRange(cfi).then(range => {
+              // 获取章节片段的文本信息
               let text = range.toLocaleString()
+              // 对文本信息进行过滤，去除其中的空格（注意是2个空格，1个空格是合理的）、换行符等特殊字符
               text = text.replace(/\s(2,)/g, '')
               text = text.replace(/\r/g, '')
               text = text.replace(/\n/g, '')
               text = text.replace(/\t/g, '')
               text = text.replace(/\f/g, '')
+              // 更新语音合成的文本信息
               this.updateText(text)
             })
           })
         }
       },
+      // 重置播放状态
       resetPlay() {
         if (this.playStatus === 1) {
           this.pausePlay()
@@ -294,38 +335,48 @@
         this.isPlaying = false
         this.playStatus = 0
       },
+      // 从头开始语音合成并播放
       play() {
         this.createVoice(this.paragraph)
       },
+      // 继续播放
       continuePlay() {
         this.$refs.audio.play().then(() => {
+          // 显示播放动画
           this.$refs.speakPlaying[0].startAnimation()
           this.isPlaying = true
           this.playStatus = 1
         })
       },
+      // 暂停播放
       pausePlay() {
         this.$refs.audio.pause()
+        // 暂停播放动画
         this.$refs.speakPlaying[0].stopAnimation()
         this.isPlaying = false
         this.playStatus = 2
       },
+      // 当播放结束时，刷新播放信息
       onAudioEnded() {
         this.resetPlay()
         this.currentPlayingTime = this.$refs.audio.currentTime
         const percent = Math.floor((this.currentPlayingTime / this.totalPlayingTime) * 100)
         this.$refs.speakWindow.refreshProgress(percent)
       },
+      // 当播放进行时，刷新播放信息
       onTimeUpdate() {
         this.currentPlayingTime = this.$refs.audio.currentTime
         const percent = Math.floor((this.currentPlayingTime / this.totalPlayingTime) * 100)
         this.$refs.speakWindow.refreshProgress(percent)
       },
+      // 调用audio.src时，audio控件会调用canplay事件
+      // 此时我们可以获取总播放时长和当前播放时长
       onCanPlay() {
         this.audioCanPlay = true
         this.currentPlayingTime = this.$refs.audio.currentTime
         this.totalPlayingTime = this.$refs.audio.duration
       },
+      // 通过API找到当前电子书的详情数据
       findBookFromList(fileName) {
         flatList().then(response => {
           if (response.status === 200) {
@@ -337,15 +388,17 @@
           }
         })
       },
+      // 初始化参数信息
       init() {
         const fileName = this.$route.query.fileName
         if (!this.bookItem) {
           this.bookItem = findBook(fileName)
         }
         if (this.bookItem) {
+          // 如果电子书已经缓存，则直接从IndexedDB数据库中获取
           getLocalForage(fileName, (err, blob) => {
             if (err || !blob) {
-              // this.downloadBook(fileName)
+              // 如果获取缓存失败，则拼接opf文件来获取电子书
               this.isOnline = true
               const opf = this.$route.query.opf
               if (opf) {
@@ -353,6 +406,7 @@
               }
             } else {
               this.isOnline = false
+              // 解析电子书
               this.parseBook(blob)
             }
           })
@@ -360,42 +414,38 @@
           this.findBookFromList(fileName)
         }
       },
-      downloadBook(fileName) {
-        download(
-          this.bookItem,
-          () => {
-            getLocalForage(fileName, (err, blob) => {
-              if (err) {
-                return
-              }
-              this.parseBook(blob)
-            })
-          })
-      },
+      // 解析电子书
       parseBook(blob) {
+        // 解析电子书
         this.book = new Epub(blob)
+        // 获取电子书的metadata
         this.book.loaded.metadata.then(metadata => {
           this.metadata = metadata
         })
+        // 如果是在线获取的电子书，则通过Book.coverUrl()方法获取封面链接
         if (this.isOnline) {
           this.book.coverUrl().then(url => {
             this.cover = url
           })
         } else {
+          // 如果是本地获取的电子书，通过Book.loaded.cover方法获取封面链接（加快封面获取速度）
           this.book.loaded.cover.then(cover => {
             this.book.archive.createUrl(cover).then(url => {
               this.cover = url
             })
           })
         }
+        // 获取电子书的目录信息
         this.book.loaded.navigation.then(nav => {
           this.navigation = nav
         })
+        // 渲染电子书
         this.display()
       },
       back() {
         this.$router.go(-1)
       },
+      // 处理滚动条的事件，决定标题阴影是否展示
       onScroll(offsetY) {
         if (offsetY > realPx(42)) {
           this.$refs.title.showShadow()
@@ -406,6 +456,7 @@
       toggleContent() {
         this.ifShowContent = !this.ifShowContent
       },
+      // 渲染电子书
       display() {
         const height = window.innerHeight * 0.9 - realPx(40) - realPx(54) - realPx(46) - realPx(48) - realPx(60) - realPx(44)
         this.rendition = this.book.renderTo('read', {

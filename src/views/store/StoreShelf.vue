@@ -1,3 +1,4 @@
+<!-- 书架组件 -->
 <template>
   <div class="store-shelf">
     <shelf-title :title="$t('shelf.title')"></shelf-title>
@@ -31,6 +32,7 @@
       ShelfFooter
     },
     watch: {
+      // 监听编辑模式，编辑模式下滚动条距底部需要产生48像素的距离
       isEditMode(isEditMode) {
         this.scrollBottom = isEditMode ? 48 : 0
         this.$nextTick(() => {
@@ -44,13 +46,17 @@
       }
     },
     methods: {
+      // 滚动页面的监听事件，ShelfTitle和ShelfSearch组件会进行监听
       onScroll(offsetY) {
         this.setOffsetY(offsetY)
       }
     },
     mounted() {
+      // 获取书架列表数据
       this.getShelfList()
+      // 初始化书架分类数据
       this.setShelfCategory([])
+      // 设置vuex的currentType为1，表示当前位于书架，影响ShelfTitle状态
       this.setCurrentType(1)
     }
   }
