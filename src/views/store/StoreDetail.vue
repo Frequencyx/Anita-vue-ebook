@@ -74,12 +74,13 @@
 </template>
 
 <script type="text/ecmascript-6">
-  import DetailTitle from '../../components/detail/DetailTitle'
+  import DetailTitle from '../../components/detail/DetaiTitle'
   import BookInfo from '../../components/detail/BookInfo'
   import Scroll from '../../components/common/Scroll'
   import Toast from '../../components/common/Toast'
   import { detail } from '../../api/store'
   import { px2rem, realPx } from '../../utils/utils'
+  import { getLocalForage } from '../../utils/localForage'
   import Epub from 'epubjs'
 
   global.ePub = Epub
@@ -164,6 +165,24 @@
         })
       },
       trialListening() {
+        getLocalForage(this.bookItem.fileName, (err, blob) => {
+          if (!err && blob && blob instanceof Blob) {
+            this.$router.push({
+              path: '/store/speaking',
+              query: {
+                fileName: this.bookItem.fileName
+              }
+            })
+          } else {
+            this.$router.push({
+              path: '/store/speaking',
+              query: {
+                fileName: this.bookItem.fileName,
+                opf: this.opf
+              }
+            })
+          }
+        })
       },
       read(item) {
         this.$router.push({
