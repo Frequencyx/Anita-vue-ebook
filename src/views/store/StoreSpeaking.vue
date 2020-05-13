@@ -7,11 +7,13 @@
             :bottom="scrollBottom"
             :ifNoScroll="disableScroll"
             @onScroll="onScroll"
-            ref="scroll">
+            ref="scroll"
+    >
       <book-info :cover="cover"
                  :title="title"
                  :author="author"
-                 :desc="desc"></book-info>
+                 :desc="desc"
+      ></book-info>
       <div class="book-speak-title-wrapper">
         <div class="icon-speak-wrapper">
           <span class="icon-speak"></span>
@@ -30,12 +32,15 @@
           </div>
           <div class="book-detail-content-item-wrapper">
             <div class="book-detail-content-item" v-for="(item, index) in flatNavigation" :key="index"
-                 @click="speak(item, index)">
+                 @click="speak(item, index)"
+            >
               <speak-playing v-if="playingIndex === index"
                              :number="5"
-                             ref="speakPlaying"></speak-playing>
+                             ref="speakPlaying"
+              ></speak-playing>
               <div class="book-detail-content-navigation-text" :class="{'is-playing': playingIndex === index}"
-                   v-if="item.label">{{item.label}}
+                   v-if="item.label"
+              >{{item.label}}
               </div>
             </div>
           </div>
@@ -44,7 +49,8 @@
       <audio @canplay="onCanPlay"
              @timeupdate="onTimeUpdate"
              @ended="onAudioEnded"
-             ref="audio"></audio>
+             ref="audio"
+      ></audio>
     </scroll>
     <bottom :chapter="chapter"
             :currentSectionIndex="currentSectionIndex"
@@ -52,7 +58,8 @@
             :showPlay="showPlay"
             :isPlaying.sync="isPlaying"
             :playInfo="playInfo"
-            @onPlayingCardClick="onPlayingCardClick"></bottom>
+            @onPlayingCardClick="onPlayingCardClick"
+    ></bottom>
     <div class="book-wrapper">
       <div id="read"></div>
     </div>
@@ -64,12 +71,13 @@
                   :isPlaying.sync="isPlaying"
                   :playInfo="playInfo"
                   @updateText="updateText"
-                  ref="speakWindow"></speak-window>
+                  ref="speakWindow"
+    ></speak-window>
   </div>
 </template>
 
 <script type="text/ecmascript-6">
-  import DetailTitle from '../../components/detail/DetaiTitle'
+  import DetailTitle from '../../components/detail/DetailTitle'
   import BookInfo from '../../components/detail/BookInfo'
   import Scroll from '../../components/common/Scroll'
   import SpeakPlaying from '../../components/speak/SpeakPlaying'
@@ -82,6 +90,264 @@
   import Epub from 'epubjs'
 
   global.ePub = Epub
+
+  const APPID = '5b4da68b'
+  const API_SECRET = '48487e25de82a2c167eccda30f7a3c70'
+  const API_KEY = '7154170219e3e4426025afef812d070e'
+  let isChrome = navigator.userAgent.toLowerCase().match(/chrome/)
+  let notSupportTip = isChrome ? '您的浏览器暂时不支持体验功能，请升级您的浏览器' : '您现在使用的浏览器暂时不支持体验功能，<br />推荐使用谷歌浏览器Chrome'
+
+  function getWebsocketUrl() {
+    return new Promise((resolve, reject) => {
+      var apiKey = API_KEY
+      var apiSecret = API_SECRET
+      var url = 'wss://tts-api.xfyun.cn/v2/tts'
+      var host = location.host
+      var date = new Date().toGMTString()
+      var algorithm = 'hmac-sha256'
+      var headers = 'host date request-line'
+      var signatureOrigin = `host: ${host}\ndate: ${date}\nGET /v2/tts HTTP/1.1`
+      var signatureSha = CryptoJS.HmacSHA256(signatureOrigin, apiSecret)
+      var signature = CryptoJS.enc.Base64.stringify(signatureSha)
+      var authorizationOrigin = `api_key="${apiKey}", algorithm="${algorithm}", headers="${headers}", signature="${signature}"`
+      var authorization = btoa(authorizationOrigin)
+      url = `${url}?authorization=${authorization}&date=${date}&host=${host}`
+      resolve(url)
+    })
+  }
+
+  let audioCtx
+  let source
+  let btnState = {
+    unTTS: '立即合成',
+    ttsing: '正在合成',
+    endTTS: '立即播放',
+    play: '停止播放',
+    pause: '继续播放',
+    endPlay: '重新播放',
+    errorTTS: '合成失败'
+  }
+
+  class Experience {
+    constructor({
+                  speed = 50,
+                  voice = 50,
+                  pitch = 50,
+                  text = '',
+                  engineType = 'aisound',
+                  voiceName = 'xiaoyan',
+                  playBtn = '.js-base-play',
+                  defaultText = ''
+                } = {}) {
+      this.speed = speed
+      this.voice = voice
+      this.pitch = pitch
+      this.text = text
+      this.defaultText = defaultText
+      this.engineType = engineType
+      this.voiceName = voiceName
+      this.playBtn = playBtn
+      this.playState = ''
+      this.audioDatas = []
+      this.pcmPlayWork = new Worker('./transform.worker.js')
+      this.pcmPlayWork.onmessage = (e) => {
+        this.onmessageWork(e)
+      }
+    }
+
+    setConfig({
+                speed,
+                voice,
+                pitch,
+                text,
+                defaultText,
+                engineType,
+                voiceName
+              }) {
+      speed && (this.speed = speed)
+      voice && (this.voice = voice)
+      pitch && (this.pitch = pitch)
+      text && (this.text = text)
+      defaultText && (this.defaultText = defaultText)
+      engineType && (this.engineType = engineType)
+      voiceName && (this.voiceName = voiceName)
+      this.resetAudio()
+    }
+
+    onmessageWork(e) {
+      switch (e.data.command) {
+        case 'newAudioData': {
+          this.audioDatas.push(e.data.data)
+          if (this.playState === 'ttsing' && this.audioDatas.length === 1) {
+            this.playTimeout = setTimeout(() => {
+              this.audioPlay()
+            }, 1000)
+          }
+          break
+        }
+      }
+    }
+
+    setBtnState(state) {
+      let oldState = this.playState
+      this.playState = state
+    }
+
+    getAudio() {
+      this.setBtnState('ttsing')
+      getWebsocketUrl().then((url) => {
+        this.connectWebsocket(url)
+      })
+    }
+
+    connectWebsocket(url) {
+      if ('WebSocket' in window) {
+        this.websocket = new WebSocket(url)
+      } else if ('MozWebSocket' in window) {
+        this.websocket = new MozWebSocket(url)
+      } else {
+        alert(notSupportTip)
+        return
+      }
+      let self = this
+      this.websocket.onopen = (e) => {
+        var params = {
+          'common': {
+            'app_id': APPID // APPID
+          },
+          'business': {
+            'ent': self.engineType,
+            'aue': 'raw',
+            'auf': 'audio/L16;rate=16000',
+            'vcn': self.voiceName,
+            'speed': self.speed,
+            'volume': self.voice * 10,
+            'pitch': self.pitch,
+            //'bgs': 1,
+            'tte': 'UTF8'
+          },
+          'data': {
+            'status': 2,
+            'text': Base64.encode(self.text || self.defaultText || DEFAULT_TEXT)
+          }
+        }
+        this.websocket.send(JSON.stringify(params))
+      }
+      this.websocket.onmessage = (e) => {
+        let jsonData = JSON.parse(e.data)
+        // 合成失败
+        if (jsonData.code !== 0) {
+          alert(`${jsonData.code}:${jsonData.message}`)
+          self.resetAudio()
+          this.websocket.close()
+          return
+        }
+        self.pcmPlayWork.postMessage({
+          command: 'transData',
+          data: jsonData.data.audio
+        })
+
+        if (jsonData.code === 0 && jsonData.data.status === 2) {
+          this.websocket.close()
+        }
+      }
+      this.websocket.onerror = (e) => {
+        console.log(e)
+        console.log(e.data)
+      }
+      this.websocket.onclose = (e) => {
+        console.log(e)
+      }
+    }
+
+    resetAudio() {
+      this.audioPause()
+      this.setBtnState('unTTS')
+      this.audioDatasIndex = 0
+      this.audioDatas = []
+      this.websocket && this.websocket.close()
+      clearTimeout(this.playTimeout)
+    }
+
+    audioPlay() {
+      try {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+        }
+        if (!audioCtx) {
+          alert(notSupportTip)
+          return
+        }
+      } catch (e) {
+        alert(notSupportTip)
+        return
+      }
+      this.audioDatasIndex = 0
+      if (this.audioDatas.length) {
+        this.playSource()
+        this.setBtnState('play')
+      } else {
+        this.getAudio()
+      }
+    }
+
+    audioPause(state) {
+      if (this.playState === 'play') {
+        this.setBtnState(state || 'endPlay')
+      }
+      clearTimeout(this.playTimeout)
+      try {
+        source && source.stop()
+      } catch (e) {
+        console.log(e)
+      }
+    }
+
+    playSource() {
+      let bufferLength = 0
+      let dataLength = this.audioDatas.length
+      for (let i = this.audioDatasIndex; i < dataLength; i++) {
+        bufferLength += this.audioDatas[i].length
+      }
+      let audioBuffer = audioCtx.createBuffer(1, bufferLength, 22050)
+      let offset = 0
+      let nowBuffering = audioBuffer.getChannelData(0)
+      for (let i = this.audioDatasIndex; i < dataLength; i++) {
+        let audioData = this.audioDatas[i]
+        if (audioBuffer.copyToChannel) {
+          audioBuffer.copyToChannel(audioData, 0, offset)
+        } else {
+          for (let j = 0; j < audioData.length; j++) {
+            nowBuffering[offset + j] = audioData[j]
+          }
+        }
+        offset += audioData.length
+        this.audioDatasIndex++
+      }
+
+      source = audioCtx.createBufferSource()
+      source.buffer = audioBuffer
+      source.connect(audioCtx.destination)
+      source.start()
+      source.onended = (event) => {
+        if (this.playState !== 'play') {
+          return
+        }
+        if (this.audioDatasIndex < this.audioDatas.length) {
+          this.playSource()
+        } else {
+          this.audioPause('endPlay')
+        }
+      }
+    }
+  }
+
+  let experience = new Experience({
+    speed: 50,
+    voice: 50,
+    pitch: 50,
+    playBtn: `.audio-ctrl-btn`
+  })
 
   export default {
     components: {
@@ -219,59 +485,43 @@
     methods: {
       // 在线语音合成
       createVoice(text) {
-        const xmlhttp = new XMLHttpRequest()
-        // 创建HTTP请求，同步接收结果
-        xmlhttp.open('GET', `${process.env.VUE_APP_VOICE_URL}/voice?text=${text}&lang=${this.lang.toLowerCase()}`, false)
-        // 发送请求
-        xmlhttp.send()
-        // 获取响应内容
-        const xmlDoc = xmlhttp.responseText
-        if (xmlDoc) {
-          // 解析响应内容
-          const json = JSON.parse(xmlDoc)
-          if (json.path) {
-            // path为语音合成生成的MP3文件下载路径，将该路径赋值audio.src
-            // audio控件会自动加载音频文件
-            this.$refs.audio.src = json.path
-            // 自动播放MP3
-            this.continuePlay()
-          } else {
-            this.showToast('播放失败，未生成链接')
-          }
-        } else {
-          this.showToast('播放失败')
+        console.log('在线语音合成', text)
+        if (text !== experience.text) {
+          experience.setConfig({
+            text
+          })
         }
-        /*
-        axios.create({
-          baseURL: process.env.VUE_APP_VOICE_URL + '/voice'
-        })({
-          method: 'get',
-          params: {
-            text: text,
-            lang: this.lang.toLowerCase()
-          }
-        }).then(response => {
-          if (response.status === 200) {
-            if (response.data.error === 0) {
-              const downloadUrl = response.data.path
-              console.log('开始下载...%s', downloadUrl)
-              downloadMp3(downloadUrl, blob => {
-                const url = window.URL.createObjectURL(blob)
-                console.log(blob, url)
-                this.$refs.audio.src = url
-                this.continuePlay()
-              })
-            } else {
-              this.showToast(response.data.msg)
-            }
-          } else {
-            this.showToast('请求失败')
-          }
-        }).catch(err => {
-          console.log(err)
-          this.showToast('播放失败')
-        })
-        */
+        console.log(experience)
+        if (experience.playState === 'play') {
+          experience.audioPause()
+          this.resetPlay()
+        } else {
+          experience.audioPlay()
+          this.isPlaying = true
+          this.playStatus = 1
+        }
+        // const xmlhttp = new XMLHttpRequest()
+        // // 创建HTTP请求，同步接收结果
+        // xmlhttp.open('GET', `${process.env.VUE_APP_VOICE_URL}/voice?text=${text}&lang=${this.lang.toLowerCase()}`, false)
+        // // 发送请求
+        // xmlhttp.send()
+        // // 获取响应内容
+        // const xmlDoc = xmlhttp.responseText
+        // if (xmlDoc) {
+        //   // 解析响应内容
+        //   const json = JSON.parse(xmlDoc)
+        //   if (json.path) {
+        //     // path为语音合成生成的MP3文件下载路径，将该路径赋值audio.src
+        //     // audio控件会自动加载音频文件
+        //     this.$refs.audio.src = json.path
+        //     // 自动播放MP3
+        //     this.continuePlay()
+        //   } else {
+        //     this.showToast('播放失败，未生成链接')
+        //   }
+        // } else {
+        //   this.showToast('播放失败')
+        // }
       },
       // 切换播放状态，如果处于播放状态则暂停，如果处于暂停状态，则播放
       // 注意状态0和状态2是不通的
@@ -295,37 +545,37 @@
         this.playingIndex = index
         this.$nextTick(() => {
           this.$refs.scroll.refresh()
-        })
-        if (this.chapter) {
-          // 获取当前点击的章节信息
-          this.section = this.book.spine.get(this.chapter.href)
-          // 渲染章节
-          this.rendition.display(this.section.href).then(section => {
-            // 获取当前位置对象
-            const currentPage = this.rendition.currentLocation()
-            const cfibase = section.cfiBase
-            const cfistart = currentPage.start.cfi.replace(/.*!/, '').replace(/\)/, '')
-            const cfiend = currentPage.end.cfi.replace(/.*!/, '').replace(/\)/, '')
-            this.currentSectionIndex = currentPage.start.displayed.page
-            this.currentSectionTotal = currentPage.start.displayed.total
-            // 合成cfi信息
-            const cfi = `epubcfi(${cfibase}!,${cfistart},${cfiend})`
-            // console.log(currentPage, cfi, cfibase, cfistart, cfiend)
-            // 通过Book.getRange(cfi)方法获取指定片段的cfi对应的文本
-            this.book.getRange(cfi).then(range => {
-              // 获取章节片段的文本信息
-              let text = range.toLocaleString()
-              // 对文本信息进行过滤，去除其中的空格（注意是2个空格，1个空格是合理的）、换行符等特殊字符
-              text = text.replace(/\s(2,)/g, '')
-              text = text.replace(/\r/g, '')
-              text = text.replace(/\n/g, '')
-              text = text.replace(/\t/g, '')
-              text = text.replace(/\f/g, '')
-              // 更新语音合成的文本信息
-              this.updateText(text)
+          if (this.chapter) {
+            // 获取当前点击的章节信息
+            this.section = this.book.spine.get(this.chapter.href)
+            // 渲染章节
+            this.rendition.display(this.section.href).then(section => {
+              // 获取当前位置对象
+              const currentPage = this.rendition.currentLocation()
+              const cfibase = section.cfiBase
+              const cfistart = currentPage.start.cfi.replace(/.*!/, '').replace(/\)/, '')
+              const cfiend = currentPage.end.cfi.replace(/.*!/, '').replace(/\)/, '')
+              this.currentSectionIndex = currentPage.start.displayed.page
+              this.currentSectionTotal = currentPage.start.displayed.total
+              // 合成cfi信息
+              const cfi = `epubcfi(${cfibase}!,${cfistart},${cfiend})`
+              // console.log(currentPage, cfi, cfibase, cfistart, cfiend)
+              // 通过Book.getRange(cfi)方法获取指定片段的cfi对应的文本
+              this.book.getRange(cfi).then(range => {
+                // 获取章节片段的文本信息
+                let text = range.toLocaleString()
+                // 对文本信息进行过滤，去除其中的空格（注意是2个空格，1个空格是合理的）、换行符等特殊字符
+                text = text.replace(/\s(2,)/g, '')
+                text = text.replace(/\r/g, '')
+                text = text.replace(/\n/g, '')
+                text = text.replace(/\t/g, '')
+                text = text.replace(/\f/g, '')
+                // 更新语音合成的文本信息
+                this.updateText(text)
+              })
             })
-          })
-        }
+          }
+        })
       },
       // 重置播放状态
       resetPlay() {
@@ -500,56 +750,70 @@
     font-size: px2rem(16);
     width: 100%;
     background: white;
+
     .content-wrapper {
       width: 100%;
+
       .book-speak-title-wrapper {
         display: flex;
         padding: px2rem(15);
         box-sizing: border-box;
         border-bottom: px2rem(1) solid #eee;
+
         .icon-speak-wrapper {
           flex: 0 0 px2rem(40);
           @include left;
+
           .icon-speak {
             font-size: px2rem(24);
             color: #999;
           }
         }
+
         .speak-title-wrapper {
           flex: 1;
           @include left;
+
           .speak-title {
             font-size: px2rem(16);
             font-weight: bold;
             color: #666;
           }
         }
+
         .icon-down-wrapper {
           flex: 0 0 px2rem(40);
           @include right;
+
           .icon-up {
             font-size: px2rem(12);
             color: #999;
           }
+
           .icon-down2 {
             font-size: px2rem(12);
             color: #999;
           }
         }
       }
+
       .book-detail-content-wrapper {
         width: 100%;
         border-bottom: px2rem(1) solid #eee;
         box-sizing: border-box;
+
         .book-detail-content-list-wrapper {
           padding: px2rem(10) px2rem(15);
+
           .loading-text-wrapper {
             width: 100%;
+
             .loading-text {
               font-size: px2rem(14);
               color: #999;
             }
           }
+
           .book-detail-content-item-wrapper {
             .book-detail-content-item {
               display: flex;
@@ -558,13 +822,16 @@
               line-height: px2rem(16);
               color: #333;
               border-bottom: px2rem(1) solid #eee;
+
               &:last-child {
                 border-bottom: none;
               }
+
               .book-detail-content-navigation-text {
                 flex: 1;
                 width: 100%;
                 @include ellipsis;
+
                 &.is-playing {
                   color: $color-blue;
                   font-weight: bold;
@@ -576,6 +843,7 @@
         }
       }
     }
+
     .book-wrapper {
       position: absolute;
       bottom: -100%;

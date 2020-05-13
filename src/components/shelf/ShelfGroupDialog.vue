@@ -5,8 +5,7 @@
            :class="{'is-add': item.edit  ? item.edit === 1 : false}"
            v-for="(item, index) in categoryList"
            :key="index"
-           @click="onGroupClick(item)"
-           v-if="(item.edit === 2 && isInGroup) || item.edit !== 2 || !item.edit">
+           @click="onGroupClick(item)">
         <div class="dialog-list-item-text">{{item.title}}</div>
         <div class="dialog-list-icon-wrapper" v-if="isInGroup && shelfCategory.id === item.id">
           <span class="icon-check"></span>
@@ -74,7 +73,8 @@
         return this.shelfList.filter(item => item.type === 2)
       },
       categoryList() {
-        return [...this.defaultCategory, ...this.category]
+        return [...this.defaultCategory, ...this.category].filter((item, isInGroup) => (
+          (item.edit === 2 && isInGroup) || item.edit !== 2 || !item.edit))
       },
       title() {
         return !this.ifNewGroup ? this.$t('shelf.moveBook') : this.$t('shelf.newGroup')

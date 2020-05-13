@@ -75,7 +75,7 @@
 </template>
 
 <script type="text/ecmascript-6">
-  import DetailTitle from '../../components/detail/DetaiTitle'
+  import DetailTitle from '../../components/detail/DetailTitle'
   import BookInfo from '../../components/detail/BookInfo'
   import Scroll from '../../components/common/Scroll'
   import Toast from '../../components/common/Toast'

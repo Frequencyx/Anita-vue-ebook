@@ -12,7 +12,7 @@ const flatListData = require('./src/mock/bookFlatList')
 */
 
 module.exports = {
-  baseUrl: process.env.NODE_ENV === 'production'
+  publicPath: process.env.NODE_ENV === 'production'
     ? './'
     : '/',
   devServer: {
@@ -28,8 +28,8 @@ module.exports = {
   configureWebpack: {
     performance: {
       hints: 'warning',
-      maxAssetSize: 524288 * 10,
-      maxEntrypointSize: 524288 * 10
+      maxAssetSize: 524288 * 100,
+      maxEntrypointSize: 524288 * 100
     }
   }
 }
